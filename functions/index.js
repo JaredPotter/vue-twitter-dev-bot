@@ -37,6 +37,12 @@ exports.postDailyTweetManual = functions.https.onRequest(
     }
 );
 
+exports.tweet = functions.https.onRequest((request, response) => {
+    corsHandler(request, response, () => {
+        // statuses/show/:id
+    });
+});
+
 exports.tweets = functions.https.onRequest((request, response) => {
     corsHandler(request, response, () => {
         // todo: get query parameters
