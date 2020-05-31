@@ -31,9 +31,33 @@ exports.setDailyTweetTimeManual = functions.https.onRequest(
 );
 
 exports.postDailyTweetManual = functions.https.onRequest(
-    (request, response) => {
-        const result = postDailyTweet();
-        response.send(result);
+    async (request, response) => {
+        await postDailyTweet();
+        response.send('done');
+    }
+);
+
+exports.postTweetManual = functions.https.onRequest(
+    async (request, response) => {
+        const tweet = {
+            status: `Line One\r\n\r\nLine Two\r\n\r\n\r\nLine Three`
+        };
+        twitterClient
+        .post('statuses/update', tweet)
+        .then(function (tweet) {
+            console.log(tweet);
+            response.send('done');
+        })
+        .catch(function (error) {
+            if (error && error.length > 0) {
+                for (const e of error) {
+                    console.log('Error Message: ' + e.message);
+                    console.log('Error Code: ' + e.code);
+                }
+            }
+            response.send('failed');
+            throw error;
+        });
     }
 );
 
@@ -105,7 +129,8 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-exports.dailyJob = functions.pubsub.schedule('* 7 * * *').onRun((context) => {
+// https://crontab.guru/#0_7_*_*_*
+exports.dailyJob = functions.pubsub.schedule('0 7 * * *').onRun(() => {
     console.log(`IT'S 7:00AM - TIME TO DETERMINE POST TIME!`);
 
     const time = getDailyTweetTime();
@@ -117,12 +142,11 @@ function addTweetTimeDoc(time) {
     const dateTime = new Date();
     dateTime.setUTCHours(time.hour + 6);
     dateTime.setUTCMinutes(time.minute);
-    // dateTime.formatUTC()
-    // dateTime.setUtc
-    // const t = dateTime.getDate();
+    const now = admin.firestore.Timestamp.now();
 
     const doc = {
         timeToTweet: admin.firestore.Timestamp.fromDate(dateTime),
+        createdAt: now
     };
     db.collection('tweetTime').add(doc);
 }
@@ -139,15 +163,15 @@ function getRndInteger(min, max) {
 }
 
 exports.isTimeTimeToTweetRunner = functions
-    .runWith({ memory: '2GB' })
-    .pubsub.schedule('1 * * * *')
+    .pubsub.schedule('* * * * *')
     .onRun(async () => {
-        postDailyTweet();
+        await postDailyTweet();
     });
 
 async function postDailyTweet() {
     // Consistent timestamp
     const now = admin.firestore.Timestamp.now();
+    console.log('Checking if it is time to post a tweet');
 
     // Query all documents ready to perform
     const query = db.collection('tweetTime').where('timeToTweet', '<=', now);
@@ -167,17 +191,11 @@ async function postDailyTweet() {
                 queuedTweetIds.push(snapshot.id);
             });
 
-            console.log('queuedTweetIds.length: ' + queuedTweetIds.length);
-
             const randomIndex = getRndInteger(0, queuedTweetIds.length - 1);
-            console.log('randomIndex: ' + randomIndex);
-
             const tweetId = queuedTweetIds[randomIndex];
-            const tweet = await (
-                await db.collection('queued_tweets').doc(tweetId).get()
-            ).data();
+            const tweetSnapshot = await db.collection('queued_tweets').doc(tweetId).get();
+            const tweet = tweetSnapshot.data();
 
-            console.log('tweet: ' + JSON.stringify(tweet));
 
             let mediaIds = '';
 
@@ -188,23 +206,22 @@ async function postDailyTweet() {
                 }
             }
 
-            // TODO: post to twitter via API.
+            // Prepare Status
+            const preparedStatus = tweet.status.replace(/\\r\\n/g, `\r\n`);
             const payload = {
-                status: tweet.status,
+                status: preparedStatus,
             };
-
-            console.log('mediaIds: ' + mediaIds);
 
             if (mediaIds) {
                 payload['media_ids'] = mediaIds;
             }
 
-            console.log('Posting Tweet: ' + JSON.stringify(payload));
+            // console.log('Posting Tweet: ' + JSON.stringify(payload));
 
-            const twitterApiResponse = twitterClient
+            twitterClient
                 .post('statuses/update', payload)
-                .then(function (tweet) {
-                    console.log(tweet);
+                .then(() => {
+                    console.log('Successfully posted tweet');
                 })
                 .catch(function (error) {
                     if (error && error.length > 0) {
@@ -217,9 +234,10 @@ async function postDailyTweet() {
                 });
 
             const id = snapshot.id;
+            
+            await db.collection('posted_tweets').add(tweet);
+            await db.collection('queued_tweets').doc(tweetId).delete();
             await db.collection('tweetTime').doc(id).delete();
         });
     }
 }
-
-// postDailyTweet(); // only for dev

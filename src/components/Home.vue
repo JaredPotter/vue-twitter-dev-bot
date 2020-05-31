@@ -42,7 +42,7 @@ export default {
                 // eslint-disable-next-line no-unused-vars
                 .then((response) => {
                     // eslint-disable-next-line no-debugger
-                    debugger;
+                    // debugger;
                     this.tweetList = response.data;
                 })
                 .catch((error) => {
@@ -52,7 +52,7 @@ export default {
     },
 
     mounted() {
-        this.getTweets();
+        // this.getTweets();
     },
 };
 </script>

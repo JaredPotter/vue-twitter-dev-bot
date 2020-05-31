@@ -2,16 +2,29 @@
     <div class="tweet-form-container">
         <textarea
             v-model="status"
+            v-focus
             placeholder="What's happening?"
             class="status"
         ></textarea>
+        <div>Remaining Characters: {{ remainingCharacters }}</div>
+        <button
+            @click="queueTweet()"
+            class="twitter-button"
+            :class="{ disabled: !status }"
+            :disabled="!status"
+        >
+            QUEUE TWEET
+        </button>
+        <h3>TIPS</h3>
         <div>Links magically load preview content</div>
+        <div># Hashtags # work as expected</div>
+        <div>Only 1 blank link - \r\n\r\n will get displayed by Twitter</div>
         <input
             type="file"
             @change="handleFileInputChange"
             multiple
             class="file-input"
-            ref="imageInput"      
+            ref="imageInput"
         />
         <ul>
             <li>Up to 4 Images - 5 MB each</li>
@@ -23,16 +36,9 @@
             <option value="devTip">Dev Tip</option>
             <option value="devFunny">Dev Funny</option>
             <option value="devOptinion">Dev Opinion</option>
+            <option value="html5Magic">HTML 5 Magic</option>
         </select>
         <div v-if="isUploading">WE ARE CURRENTLY UPLOADING!</div>
-        <button
-            @click="queueTweet()"
-            class="twitter-button"
-            :class="{ disabled: !status }"
-            :disabled="!status"
-        >
-            QUEUE TWEET
-        </button>
         <button
             @click="postTweet()"
             class="twitter-button"
@@ -70,11 +76,16 @@ import { v4 as uuidv4 } from 'uuid';
 export default {
     data() {
         return {
-            status: 'this is happening',
+            status: '',
             files: [],
             isUploading: false,
-            category: 'devTip'
+            category: 'devTip',
         };
+    },
+    computed: {
+        remainingCharacters() {
+            return 250 - this.status.length;
+        }
     },
     methods: {
         handleFileInputChange(event) {
@@ -83,11 +94,12 @@ export default {
         },
         async queueTweet() {
             const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+            const status = this.status.replace(/\n/g, `\\r\\n`); 
             const tweet = {
                 created: timestamp,
-                status: this.status,
+                status: status,
                 media_urls: [],
-                category: this.category
+                category: this.category,
             };
 
             const mediaUrls = [];
@@ -98,7 +110,7 @@ export default {
                     const fileRef = storageRef.child(`images/${uuid}`);
 
                     const metadata = {
-                        contentType: file.type
+                        contentType: file.type,
                     };
 
                     this.isUploading = true;
@@ -111,30 +123,37 @@ export default {
                     const downloadURL = await uploadTaskSnapshot.ref.getDownloadURL();
 
                     mediaUrls.push(downloadURL);
-
-                    this.$refs.imageInput.value = null
                 }
+
+                this.$refs.imageInput.value = null;
 
                 this.isUploading = false;
             }
 
-            if(mediaUrls.length > 0) {
-                tweet.media_urls = mediaUrls
+            if (mediaUrls.length > 0) {
+                tweet.media_urls = mediaUrls;
             }
-            
-            await db.collection('queued_tweets').add(tweet);
 
+            await db.collection('queued_tweets').add(tweet);
 
             this.status = '';
         },
         postTweet() {},
+    },
+    directives: {
+        focus: {
+            // directive definition
+            inserted: function (el) {
+                el.focus();
+            },
+        },
     },
 };
 </script>
 
 <style lang="scss">
 .tweet-form-container {
-    width: 30rem;
+    // width: 30rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -143,6 +162,11 @@ export default {
         width: 20rem;
         height: 4rem;
         font-size: 1.2rem;
+        background: #15202B;
+        color: white;
+        font-weight: bold;
+        border: 1px solid rgb(56, 68, 77);
+        padding: 8px;
     }
 
     .status,
@@ -164,7 +188,9 @@ export default {
         background-color: rgb(29, 161, 242);
         border-radius: 1rem;
         color: white;
-        font-size: 1rem;
+        width: 20rem;
+        font-size: 1.5rem;
+        font-weight: bold;
         padding: 1rem;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
             Roboto, Ubuntu, 'Helvetica Neue', sans-serif;
