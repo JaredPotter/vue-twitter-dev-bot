@@ -213,7 +213,6 @@ async function postDailyTweet() {
             const tweetSnapshot = await db.collection('queued_tweets').doc(tweetId).get();
             const tweet = tweetSnapshot.data();
 
-
             let mediaIds = '';
 
             if (tweet && tweet.media_urls && tweet.media_urls.length > 0) {
@@ -222,7 +221,7 @@ async function postDailyTweet() {
                     mediaIds += mediaId + ',';
                 }
             }
-
+            console.log('here4');
             // Prepare Status
             const preparedStatus = tweet.status.replace(/\\r\\n/g, `\r\n`);
             const payload = {
@@ -230,10 +229,10 @@ async function postDailyTweet() {
             };
 
             if (mediaIds) {
+                console.log('mediaIds: ' + mediaIds);
                 payload['media_ids'] = mediaIds;
             }
 
-            // console.log('Posting Tweet: ' + JSON.stringify(payload));
 
             try {
                 await twitterClient.post('statuses/update', payload);
@@ -247,21 +246,6 @@ async function postDailyTweet() {
                 }
                 throw error;
             }
-
-            // twitterClient
-            //     .post('statuses/update', payload)
-            //     .then(() => {
-            //         console.log('Successfully posted tweet');
-            //     })
-            //     .catch(function (error) {
-            //         if (error && error.length > 0) {
-            //             for (const e of error) {
-            //                 console.log('Error Message: ' + e.message);
-            //                 console.log('Error Code: ' + e.code);
-            //             }
-            //         }
-            //         throw error;
-            //     });
 
             const id = snapshot.id;
             

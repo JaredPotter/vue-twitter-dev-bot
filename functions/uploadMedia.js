@@ -13,90 +13,106 @@ const twitterClient = new Twitter({
     access_token_key: TWITTER_ACCESS_TOKEN_KEY,
     access_token_secret: TWITTER_ACCESS_TOKEN_SECRET,
 });
-debugger;
 // const imageUrl =
 //     'https://firebasestorage.googleapis.com/v0/b/vue-twitter-dev-bot.appspot.com/o/images%2F9e28222e-f732-4030-85e9-9a0d0c1c5f2b?alt=media&token=a70141d7-5f67-46c8-b793-168b03f49384';
 
-
 async function startUpload(mediaUrl) {
+    console.log('startUpload() called');
     console.log(mediaUrl);
     const response = await axios.get(mediaUrl);
-    
+
     const mediaType = response.headers['content-type'];
     const mediaSize = response.headers['content-length'];
-    
-    await download_image(mediaUrl, 'tempImage');
-    const mediaData  = fs.readFileSync('tempImage');
-    
-    // const mediaData = response.data;
-    
-    // console.log(mediaData);
-    
+
     console.log('mediaType: ' + mediaType);
     console.log('mediaSize: ' + mediaSize);
-    
+
+    await download_image(mediaUrl, '/tmp/tempImage');
+    const mediaData = fs.readFileSync('/tmp/tempImage');
+
+    const stats = fs.statSync('/tmp/tempImage');
+    const fileSizeInBytes = stats['size'];
+    console.log('fileSizeBytes: ' + fileSizeInBytes);
+
+
+    console.log('mediaType: ' + mediaType);
+    console.log('mediaSize: ' + mediaSize);
+
     const initParams = {
         command: 'INIT',
         total_bytes: mediaSize,
         media_type: mediaType,
     };
-    const initUploadResponse = await twitterPost('media/upload', initParams);
+    let initUploadResponse;
+
+    try {
+        initUploadResponse = await twitterPost('media/upload', initParams);
+    } catch (error) {
+        console.log(error);
+
+        throw error;
+    }
+
     let mediaId = initUploadResponse.media_id_string;
+
+    if (!mediaId) {
+        throw 'mediaId is undefined';
+    }
+
     console.log('mediaId: ' + mediaId);
-    
+
     const appendParams = {
         command: 'APPEND',
         media_id: mediaId,
         media: mediaData,
         segment_index: 0,
     };
-    
+
     console.log('NOW UPLOADING');
-    
-    await twitterPost(
-        'media/upload',
-        appendParams
-    );
-    
-    
+
+    await twitterPost('media/upload', appendParams);
+
     console.log('STILL GOOD! mediaId: ' + mediaId);
-    
+
     const finalizeUploadParams = {
         command: 'FINALIZE',
         media_id: mediaId,
     };
-    
-    await twitterPost('media/upload', finalizeUploadParams);
-    
+
+    try {
+        await twitterPost('media/upload', finalizeUploadParams);
+    } catch (error) {
+        console.log(error);
+
+        throw error;
+    }
+
     console.log('FINISHED UPLOADING! mediaId: ' + mediaId);
-    
+
     return mediaId;
-};
+}
 
 module.exports.startUpload = startUpload;
 
 async function download_image(url, image_path) {
-  return axios({
-    url,
-    responseType: 'stream',
-  }).then(
-    response =>
-      new Promise((resolve, reject) => {
-        response.data
-          .pipe(fs.createWriteStream(image_path))
-          .on('finish', () => resolve())
-          .on('error', e => reject(e));
-      }),
-  );
+    const writer = fs.createWriteStream(image_path);
+    const response = await axios({ url, responseType: 'stream' });
+
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+    });
 }
 
 async function twitterPost(endpoint, params) {
     console.log('Endpoint: ' + endpoint);
 
     return new Promise((resolve, reject) => {
-        twitterClient.post(endpoint, params, (error, data, response) => {
+        twitterClient.post(endpoint, params, (error, data) => {
             if (error && error.length > 0) {
-                for(const e of error) {
+                for (const e of error) {
                     console.log('Error Message: ' + e.message);
                     console.log('Error Code: ' + e.code);
                 }
