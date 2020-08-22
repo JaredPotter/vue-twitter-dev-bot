@@ -23,3 +23,5 @@ yarn-error.log*
 .env
 
 vue-twitter-dev-bot-firebase-adminsdk-pquob-e675549e55.json
+
+firebase-debug.log

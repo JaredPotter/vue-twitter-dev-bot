@@ -133,6 +133,13 @@ const db = admin.firestore();
 exports.dailyJob = functions.pubsub.schedule('0 7 * * *').onRun(() => {
     console.log(`IT'S 7:00AM - TIME TO DETERMINE POST TIME!`);
 
+    const now = new Date();
+    const day = now.getDay();
+    if(day === 0 || day === 6) {
+        console.log(`It's the weekend - don't post`);
+        return;
+    }
+
     const time = getDailyTweetTime();
 
     addTweetTimeDoc(time);
@@ -163,9 +170,18 @@ function getRndInteger(min, max) {
 }
 
 exports.isTimeTimeToTweetRunner = functions
-    .pubsub.schedule('* * * * *')
+    .pubsub.schedule('2,13,21,36,45,54 * * * *')
     .onRun(async () => {
+        const now = new Date();
+        const day = now.getDay();
+
+        if(day === 0 || day === 6) {
+            console.log(`It's the weekend - don't post`);
+            return;
+        }
+
         await postDailyTweet();
+        return;
     });
 
 async function postDailyTweet() {
@@ -178,6 +194,7 @@ async function postDailyTweet() {
 
     const snapshot = await query.get();
     console.log('snapshot.size: ' + snapshot.size);
+
     if (snapshot.size > 0) {
         // Loop over documents and push job.
         snapshot.forEach(async (snapshot) => {
@@ -218,26 +235,40 @@ async function postDailyTweet() {
 
             // console.log('Posting Tweet: ' + JSON.stringify(payload));
 
-            twitterClient
-                .post('statuses/update', payload)
-                .then(() => {
-                    console.log('Successfully posted tweet');
-                })
-                .catch(function (error) {
-                    if (error && error.length > 0) {
-                        for (const e of error) {
-                            console.log('Error Message: ' + e.message);
-                            console.log('Error Code: ' + e.code);
-                        }
+            try {
+                await twitterClient.post('statuses/update', payload);
+                console.log('Successfully posted tweet');
+            } catch (error) {
+                if (error && error.length > 0) {
+                    for (const e of error) {
+                        console.log('Error Message: ' + e.message);
+                        console.log('Error Code: ' + e.code);
                     }
-                    throw error;
-                });
+                }
+                throw error;
+            }
+
+            // twitterClient
+            //     .post('statuses/update', payload)
+            //     .then(() => {
+            //         console.log('Successfully posted tweet');
+            //     })
+            //     .catch(function (error) {
+            //         if (error && error.length > 0) {
+            //             for (const e of error) {
+            //                 console.log('Error Message: ' + e.message);
+            //                 console.log('Error Code: ' + e.code);
+            //             }
+            //         }
+            //         throw error;
+            //     });
 
             const id = snapshot.id;
             
             await db.collection('posted_tweets').add(tweet);
             await db.collection('queued_tweets').doc(tweetId).delete();
             await db.collection('tweetTime').doc(id).delete();
+            console.log("postDailyTweet() complete");
         });
     }
 }
